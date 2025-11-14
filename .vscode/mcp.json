@@ -1,0 +1,11 @@
+{
+	"inputs": [
+		{
+			"type": "promptString",
+			"id": "n8n-mcp-token",
+			"description": "Your n8n-MCP AUTH_TOKEN",
+			"password": true
+		}
+	],
+	"servers": {}
+}

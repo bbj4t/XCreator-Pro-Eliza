@@ -37,9 +37,10 @@ services:
       context: ./eliza-framework
       dockerfile: Dockerfile
     ports:
-      - "3001:3000"
+      - "4001:4001"
     environment:
       - NODE_ENV=production
+      - PORT=4001
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/eliza
       - REDIS_URL=redis://redis:6379
     volumes:
@@ -224,7 +225,7 @@ services:
     image: grafana/grafana:latest
     container_name: grafana-dashboard
     ports:
-      - "3001:3000"
+      - "3002:3000"
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin123
       - GF_INSTALL_PLUGINS=grafana-piechart-panel
