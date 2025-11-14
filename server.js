@@ -21,6 +21,7 @@ const { errorHandler } = require('./middleware/error-handler');
 
 class XCreatorServer {
   constructor() {
+    // Core objects
     this.app = express();
     this.server = createServer(this.app);
     this.io = new Server(this.server, {
@@ -30,16 +31,15 @@ class XCreatorServer {
       }
     });
 
+    // Service placeholders
     this.elizaBridge = null;
     this.characterManager = null;
     this.modelRouter = null;
     this.characterAPI = null;
+    this.initialized = false;
 
+    // Non-async middleware first; async service setup deferred to start()
     this.setupMiddleware();
-    this.setupServices();
-    this.setupRoutes();
-    this.setupSocketIO();
-    this.setupErrorHandling();
   }
 
   setupMiddleware() {
@@ -113,10 +113,16 @@ class XCreatorServer {
       this.characterManager = new CharacterManager(this.elizaBridge, this.modelRouter);
       logger.info('✅ Character Manager initialized');
 
-      // Initialize Character API
+      // Initialize Character API and attach routes AFTER services ready
       this.characterAPI = new CharacterAPI(this.characterManager, this.elizaBridge);
       logger.info('✅ Character API initialized');
 
+      // Now that services exist, finish remaining setup steps
+      this.setupRoutes();
+      this.setupSocketIO();
+      this.setupErrorHandling();
+
+      this.initialized = true;
       logger.info('✅ All services initialized successfully');
 
     } catch (error) {
@@ -126,6 +132,11 @@ class XCreatorServer {
   }
 
   setupRoutes() {
+    // Prevent crashes if called before CharacterAPI initialization (e.g. stale build)
+    if (!this.characterAPI) {
+      logger.warn('⚠️ CharacterAPI not initialized when setupRoutes() called; skipping for now');
+      return;
+    }
     // Health check endpoint
     this.app.get('/health', (req, res) => {
       res.json({
@@ -266,35 +277,33 @@ class XCreatorServer {
 
   async start(port = process.env.PORT || 3000) {
     try {
-      await this.setupServices();
-      
+      if (!this.initialized) {
+        await this.setupServices();
+      } else {
+        logger.warn('Server start called but services already initialized');
+      }
+
       this.server.listen(port, () => {
         logger.info(`🚀 XCreator Pro + Eliza server started on port ${port}`);
         logger.info(`📱 Socket.IO server running on port ${port}`);
         logger.info(`🌐 Health check: http://localhost:${port}/health`);
       });
 
-      // Start autonomous characters
+      // Start autonomous characters after short delay
       setTimeout(async () => {
         await this.startAutonomousCharacters();
-      }, 5000); // Wait 5 seconds for full initialization
+      }, 5000);
 
-      // Graceful shutdown
-      process.on('SIGTERM', async () => {
-        logger.info('🛑 Received SIGTERM, shutting down gracefully');
+      // Graceful shutdown handlers
+      const shutdown = (signal) => {
+        logger.info(`🛑 Received ${signal}, shutting down gracefully`);
         this.server.close(() => {
           logger.info('✅ Server closed');
           process.exit(0);
         });
-      });
-
-      process.on('SIGINT', async () => {
-        logger.info('🛑 Received SIGINT, shutting down gracefully');
-        this.server.close(() => {
-          logger.info('✅ Server closed');
-          process.exit(0);
-        });
-      });
+      };
+      process.on('SIGTERM', () => shutdown('SIGTERM'));
+      process.on('SIGINT', () => shutdown('SIGINT'));
 
     } catch (error) {
       logger.error('❌ Failed to start server:', error);
